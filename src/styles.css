@@ -1,0 +1,266 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f2f2f2;
+  color: #1a1a1a;
+}
+
+.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+/* ---------- Form ---------- */
+
+.credit-form {
+  background: #ffffff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.credit-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.credit-form__field {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  font-weight: 600;
+  gap: 4px;
+}
+
+.credit-form__field input {
+  font-size: 0.95rem;
+  font-weight: 400;
+  padding: 8px;
+  border: 1px solid #999;
+  border-radius: 4px;
+}
+
+.credit-form__error {
+  color: #b00020;
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+.credit-form__optional {
+  margin-top: 20px;
+  border-top: 1px solid #ddd;
+  padding-top: 12px;
+}
+
+.credit-form__optional summary {
+  cursor: pointer;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.credit-form__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.credit-form__button {
+  padding: 10px 18px;
+  border-radius: 4px;
+  border: 1px solid #2e7d32;
+  background: #ffffff;
+  color: #2e7d32;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.credit-form__button--primary {
+  background: #2e7d32;
+  color: #ffffff;
+}
+
+.app__error-banner {
+  background: #fdecea;
+  border: 1px solid #b00020;
+  color: #b00020;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 24px;
+  font-weight: 600;
+}
+
+/* ---------- Document ---------- */
+
+.document {
+  background: #ffffff;
+  border: 1px solid #000;
+  padding: 24px;
+}
+
+.document-header__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.document-header__brand {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #2e7d32;
+  letter-spacing: 2px;
+}
+
+.document-header__generated {
+  font-size: 0.8rem;
+  color: #333;
+}
+
+.document-header__title {
+  text-align: center;
+  font-size: 1.15rem;
+  margin: 8px 0 20px;
+}
+
+.document-header__info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.document-header__column {
+  margin: 0;
+}
+
+.document-header__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+  padding: 3px 0;
+  border-bottom: 1px dotted #ccc;
+}
+
+.document-header__row dt {
+  font-weight: 600;
+  color: #333;
+}
+
+.document-header__row dd {
+  margin: 0;
+  text-align: right;
+}
+
+/* ---------- Table ---------- */
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+
+.schedule-table th,
+.schedule-table td {
+  border: 1px solid #000;
+  padding: 6px 8px;
+}
+
+.schedule-table th {
+  background: #e8e8e8;
+  text-align: center;
+  font-size: 0.75rem;
+}
+
+.schedule-table__center {
+  text-align: center;
+}
+
+.schedule-table__amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-table__totals {
+  font-weight: 700;
+  background: #f0f0f0;
+}
+
+/* ---------- Payment reference ---------- */
+
+.payment-reference h2 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
+.payment-reference p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.payment-reference__disclaimer {
+  margin-top: 16px;
+  font-size: 0.75rem;
+  color: #555;
+  font-style: italic;
+  border-top: 1px solid #ddd;
+  padding-top: 8px;
+}
+
+/* ---------- Print ---------- */
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 12mm;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  .app {
+    max-width: none;
+    padding: 0;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .document {
+    border: none;
+    padding: 0;
+  }
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 640px) {
+  .document-header__info {
+    grid-template-columns: 1fr;
+  }
+
+  .document-header__top {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .schedule-table {
+    font-size: 0.7rem;
+  }
+
+  .schedule-table th,
+  .schedule-table td {
+    padding: 4px;
+  }
+}
