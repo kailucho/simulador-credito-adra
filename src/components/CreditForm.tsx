@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { CreditInput, ValidationErrors } from '../domain/creditTypes'
+import { PRODUCT_LIST, getProduct } from '../domain/products/productCatalog'
+import type { ProductId } from '../domain/products/productTypes'
+import type { CreditInput, ValidationErrors } from '../domain/schedule/scheduleTypes'
 
 interface CreditFormProps {
+  productId: ProductId
+  onProductChange: (productId: ProductId) => void
   value: CreditInput
   errors: ValidationErrors
   onChange: (value: CreditInput) => void
@@ -24,10 +28,12 @@ const OPTIONAL_FIELDS: Array<{ key: keyof CreditInput; label: string }> = [
   { key: 'associationBankAccount', label: 'Cuenta bancaria de la asociación' },
 ]
 
-export function CreditForm({ value, errors, onChange, onSubmit, onReset, onPrint }: CreditFormProps) {
+export function CreditForm({ productId, onProductChange, value, errors, onChange, onSubmit, onReset, onPrint }: CreditFormProps) {
   const [showOptional, setShowOptional] = useState(false)
+  const product = getProduct(productId)
+  const isMonthly = product.engine === 'MONTHLY_COMMON'
 
-  function handleNumberChange(field: 'amount' | 'installments' | 'monthlyRate', raw: string) {
+  function handleNumberChange(field: 'amount' | 'installments' | 'monthlyRate' | 'nominalPaymentDay', raw: string) {
     const parsed = raw === '' ? NaN : Number(raw)
     onChange({ ...value, [field]: parsed })
   }
@@ -43,6 +49,19 @@ export function CreditForm({ value, errors, onChange, onSubmit, onReset, onPrint
 
   return (
     <form className="credit-form no-print" onSubmit={handleSubmit}>
+      <div className="credit-form__grid">
+        <label className="credit-form__field credit-form__field--wide">
+          <span>Producto</span>
+          <select value={productId} onChange={(event) => onProductChange(event.target.value as ProductId)}>
+            {PRODUCT_LIST.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <div className="credit-form__grid">
         <label className="credit-form__field">
           <span>Monto del crédito (S/)</span>
@@ -60,7 +79,7 @@ export function CreditForm({ value, errors, onChange, onSubmit, onReset, onPrint
           <span>Número de cuotas</span>
           <input
             type="number"
-            min="2"
+            min="1"
             max="60"
             step="1"
             value={Number.isNaN(value.installments) ? '' : value.installments}
@@ -100,6 +119,21 @@ export function CreditForm({ value, errors, onChange, onSubmit, onReset, onPrint
           />
           {errors.firstDueDate && <span className="credit-form__error">{errors.firstDueDate}</span>}
         </label>
+
+        {isMonthly && (
+          <label className="credit-form__field">
+            <span>Día contractual de pago</span>
+            <input
+              type="number"
+              min="1"
+              max="31"
+              step="1"
+              value={Number.isNaN(value.nominalPaymentDay) || value.nominalPaymentDay === undefined ? '' : value.nominalPaymentDay}
+              onChange={(event) => handleNumberChange('nominalPaymentDay', event.target.value)}
+            />
+            {errors.nominalPaymentDay && <span className="credit-form__error">{errors.nominalPaymentDay}</span>}
+          </label>
+        )}
       </div>
 
       <details className="credit-form__optional" open={showOptional} onToggle={(e) => setShowOptional((e.target as HTMLDetailsElement).open)}>

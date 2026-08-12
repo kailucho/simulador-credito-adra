@@ -17,9 +17,12 @@ export interface CreditInput extends OptionalCreditFields {
   monthlyRate: number
   disbursementDate: string // YYYY-MM-DD
   firstDueDate: string // YYYY-MM-DD
+  /** Día contractual/nominal de pago (solo productos MONTHLY_COMMON). */
+  nominalPaymentDay?: number
 }
 
-export interface ScheduleRow {
+/** Fila de un cronograma GROUP_28 (interés a rebatir + aporte programado + microseguro). */
+export interface Group28ScheduleRow {
   installmentNumber: number
   dueDate: Date
   dueDateLabel: string
@@ -30,7 +33,7 @@ export interface ScheduleRow {
   total: number
 }
 
-export interface ScheduleTotals {
+export interface Group28ScheduleTotals {
   principal: number
   interestCharges: number
   installmentTotal: number
@@ -38,10 +41,34 @@ export interface ScheduleTotals {
   total: number
 }
 
-export interface ScheduleResult {
-  rows: ScheduleRow[]
-  totals: ScheduleTotals
+export interface Group28ScheduleResult {
+  rows: Group28ScheduleRow[]
+  totals: Group28ScheduleTotals
   lifeInsurance: number
+  scheduledPayment: number
+}
+
+/** Fila de un cronograma MONTHLY_COMMON (interés a rebatir + fondo de cobertura). */
+export interface MonthlyScheduleRow {
+  installmentNumber: number
+  dueDate: Date
+  dueDateLabel: string
+  principal: number
+  interestCharges: number
+  coverageFund: number
+  total: number
+}
+
+export interface MonthlyScheduleTotals {
+  principal: number
+  interestCharges: number
+  coverageFund: number
+  total: number
+}
+
+export interface MonthlyScheduleResult {
+  rows: MonthlyScheduleRow[]
+  totals: MonthlyScheduleTotals
   scheduledPayment: number
 }
 

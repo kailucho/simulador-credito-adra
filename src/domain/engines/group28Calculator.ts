@@ -1,9 +1,13 @@
-import { addInstallmentPeriod, formatDueDate, parseLocalDate } from '../utils/dates'
-import type { CreditInput, ScheduleResult, ScheduleRow, ValidationErrors } from './creditTypes'
+import { addInstallmentPeriod, formatDueDate, parseLocalDate } from '../../utils/dates'
+import { round2 } from './financialMath'
+import type { CreditInput, Group28ScheduleResult, Group28ScheduleRow, ValidationErrors } from '../schedule/scheduleTypes'
 
 // NOTE: These constants were derived through reverse engineering of real ADRA
 // schedules provided as reference material. They are NOT an official ADRA
 // formula — see the disclaimer shown in the UI (PaymentReference component).
+// Este motor es EXCLUSIVO del producto Crédito Grupal Normal 28 días y
+// preserva exactamente el comportamiento verificado antes del refactor
+// multiproducto (ver src/tests/group28Calculator.test.ts).
 const FIRST_INSTALLMENT_RATE_FACTOR = 0.8348
 const REGULAR_INSTALLMENT_RATE_FACTOR = 0.90046
 
@@ -14,11 +18,6 @@ const MIN_INSTALLMENTS = 2
 const MAX_INSTALLMENTS = 60
 
 const BINARY_SEARCH_ITERATIONS = 200
-
-/** Central rounding function. Never duplicate rounding rules elsewhere. */
-export function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100
-}
 
 function rateForInstallment(installmentNumber: number, firstRate: number, regularRate: number): number {
   return installmentNumber === 1 ? firstRate : regularRate
@@ -57,7 +56,7 @@ export function calculateTheoreticalPayment(
   return high
 }
 
-export function validateCreditInput(input: CreditInput): ValidationErrors {
+export function validateGroup28Input(input: CreditInput): ValidationErrors {
   const errors: ValidationErrors = {}
 
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
@@ -95,7 +94,7 @@ export function validateCreditInput(input: CreditInput): ValidationErrors {
   return errors
 }
 
-export function calculateSchedule(input: CreditInput): ScheduleResult {
+export function calculateGroup28Schedule(input: CreditInput): Group28ScheduleResult {
   const { amount, installments, monthlyRate, firstDueDate } = input
 
   const monthlyRateDecimal = monthlyRate / 100
@@ -112,7 +111,7 @@ export function calculateSchedule(input: CreditInput): ScheduleResult {
   const firstDate = parseLocalDate(firstDueDate)
 
   let balance = amount
-  const rows: ScheduleRow[] = []
+  const rows: Group28ScheduleRow[] = []
 
   for (let number = 1; number <= installments; number += 1) {
     const isLast = number === installments

@@ -39,12 +39,18 @@ body {
   gap: 4px;
 }
 
-.credit-form__field input {
+.credit-form__field input,
+.credit-form__field select {
   font-size: 0.95rem;
   font-weight: 400;
   padding: 8px;
   border: 1px solid #999;
   border-radius: 4px;
+  background: #ffffff;
+}
+
+.credit-form__field--wide {
+  grid-column: 1 / -1;
 }
 
 .credit-form__error {
