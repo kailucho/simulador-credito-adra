@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { CreditForm } from './components/CreditForm'
 import { CreditSchedule } from './components/CreditSchedule'
 import { DocumentHeader } from './components/DocumentHeader'
+import { Header } from './components/Header'
 import { PaymentReference } from './components/PaymentReference'
 import { calculateGroup28Schedule, validateGroup28Input } from './domain/engines/group28Calculator'
 import { calculateMonthlySchedule, validateMonthlyInput } from './domain/engines/monthlyCalculator'
@@ -24,7 +25,6 @@ function App() {
   const [formValue, setFormValue] = useState<CreditInput>(defaultInputForProduct(DEFAULT_PRODUCT_ID))
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [schedule, setSchedule] = useState<ScheduleState | null>(null)
-  const [submittedInput, setSubmittedInput] = useState<CreditInput>(formValue)
   const [generatedAt, setGeneratedAt] = useState<Date>(new Date())
 
   const product = getProduct(productId)
@@ -51,7 +51,6 @@ function App() {
     } else {
       setSchedule({ engine: 'MONTHLY_COMMON', result: calculateMonthlySchedule(formValue) })
     }
-    setSubmittedInput(formValue)
     setGeneratedAt(new Date())
   }
 
@@ -64,7 +63,6 @@ function App() {
     } else {
       setSchedule({ engine: 'MONTHLY_COMMON', result: calculateMonthlySchedule(defaults) })
     }
-    setSubmittedInput(defaults)
     setGeneratedAt(new Date())
   }
 
@@ -74,30 +72,38 @@ function App() {
 
   return (
     <div className="app">
-      <CreditForm
-        productId={productId}
-        onProductChange={handleProductChange}
-        value={formValue}
-        errors={errors}
-        onChange={setFormValue}
-        onSubmit={handleSimulate}
-        onReset={handleReset}
-        onPrint={handlePrint}
-      />
-
-      {hasErrors && (
-        <div className="app__error-banner no-print" role="alert">
-          Por favor corrija los errores del formulario antes de simular el cronograma.
+      <Header />
+      <main className="app__main">
+        <div className="app__intro">
+          <h1 className="app__title">Simulador de cronograma</h1>
+          <p className="app__subtitle">{product.documentTitle.replace('CRONOGRAMA DE PAGOS - ', '')}</p>
         </div>
-      )}
 
-      {schedule && (
-        <div className="document">
-          <DocumentHeader product={product} input={submittedInput} schedule={schedule.result} generatedAt={generatedAt} />
-          <CreditSchedule schedule={schedule} />
-          <PaymentReference />
-        </div>
-      )}
+        <CreditForm
+          productId={productId}
+          onProductChange={handleProductChange}
+          value={formValue}
+          errors={errors}
+          onChange={setFormValue}
+          onSubmit={handleSimulate}
+          onReset={handleReset}
+          onPrint={handlePrint}
+        />
+
+        {hasErrors && (
+          <div className="app__error-banner no-print" role="alert">
+            Por favor corrija los errores del formulario antes de simular el cronograma.
+          </div>
+        )}
+
+        {schedule && (
+          <div className="document">
+            <DocumentHeader product={product} schedule={schedule.result} generatedAt={generatedAt} />
+            <CreditSchedule schedule={schedule} />
+            <PaymentReference />
+          </div>
+        )}
+      </main>
     </div>
   )
 }
