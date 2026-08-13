@@ -5,6 +5,45 @@ compartida por Crédito Educativo, Crédito Campaña, ADRAWASH, Mejorando Mi
 Hogar y Crédito Complementario, contra las 51 cuotas reales de
 `docs/reverse-engineering/reference-schedules.json`.
 
+## 0. Actualización del motor (agosto de 2026)
+
+El dataset contiene ahora 75 cuotas mensuales: las 51 originales y un nuevo
+cronograma de Mejorando Mi Hogar por S/18,000 a 24 cuotas. Las secciones 1–5
+conservan la investigación histórica sobre las 51 filas originales; esta
+sección documenta la implementación vigente que la reemplaza donde difiera.
+
+- Interés visible: `saldo × ((1 + TEM)^(accrualDays / 30) - 1)`.
+- Fondo visible: `saldo × 0.0009309 × coverageMonths`.
+- La cuota se resuelve con fechas nominales y un fondo interno multiplicado
+  por `1.18`. Este factor es una calibración de ingeniería inversa, no se
+  identifica ni se presenta como IGV.
+- El cronograma visible usa fechas efectivas y días reales. La estructura
+  separa `nominalDueDate`, `effectiveDueDate`, `accrualDate` y `accrualDays`
+  para incorporar una fuente de devengo interna futura sin hacks.
+
+El nuevo caso Hogar sí obtiene cuota programada S/1192 y fondo inicial
+S/33.51. No coincide al 100% con la referencia porque esta iteración no
+inventa días internos: la primera fila usa 39 días efectivos y produce
+interés S/894.22 (referencia S/893.47). Además, la fila 17 de la referencia
+muestra 03/09/2026 aunque el día contractual 2 cae en miércoles hábil; la
+regla general produce 02/09/2026. No se añadió una excepción sin evidencia
+de un feriado aplicable o una regla contractual distinta.
+
+Métricas reproducibles con `npx vite-node scripts/report-financial-accuracy.ts`:
+
+| Cronograma | Filas exactas | Celdas exactas | Error abs. | Máx. diferencia | Δ capital | Δ interés | Δ fondo | Δ total |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Educativo 5,000 | 2/12 | 25/48 | 1.24 | 0.25 | 0.00 | +0.25 | 0.00 | +0.25 |
+| Campaña 800 | 0/1 | 2/4 | 0.02 | 0.01 | 0.00 | +0.01 | 0.00 | +0.01 |
+| ADRAWASH 10,000 | 3/18 | 37/72 | 1.10 | 0.14 | 0.00 | +0.13 | 0.00 | +0.13 |
+| Hogar 10,000 | 1/12 | 21/48 | 1.30 | 0.30 | 0.00 | +0.30 | 0.00 | +0.30 |
+| Hogar 18,000 | 0/24 | 42/96 | 127.94 | 20.94 | 0.00 | -2.34 | -0.02 | -2.36 |
+| Complementario 7,000 | 1/8 | 16/32 | 0.48 | 0.07 | 0.00 | +0.06 | 0.00 | +0.06 |
+
+Los cuatro cronogramas `GROUP_28` (incluido S/3,500 a 6 cuotas) coinciden en
+100% de filas y celdas, con error absoluto y diferencias de totales iguales a
+cero.
+
 **Resultado honesto: no se identificó una fórmula que reproduzca las 51
 cuotas al céntimo.** Se documenta abajo qué se probó, qué se descartó con
 evidencia, cuál es la mejor fórmula defendible, y qué haría falta para

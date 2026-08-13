@@ -23,15 +23,15 @@ operaciones reales. Esta misma advertencia se muestra en la propia aplicación, 
 cronograma.
 
 Para los 5 productos de cuota mensual (todo menos Grupal Normal 28 días), la investigación **no
-logró identificar una fórmula que reproduzca el 100% de las 51 cuotas reales de referencia al
+logró identificar una fórmula que reproduzca el 100% de las 75 cuotas reales de referencia al
 céntimo**. El detalle completo — qué se probó, qué se descartó y por qué, y qué haría falta para
 cerrar la brecha — está documentado en
 [`docs/reverse-engineering/findings.md`](docs/reverse-engineering/findings.md).
 
 ## Requisitos
 
-- Node.js 18 o superior
-- npm 9 o superior
+- Node.js 20.19 o superior
+- npm 10 o superior
 
 ## Instalación
 
@@ -53,17 +53,14 @@ Abre la URL que indique la terminal (por defecto `http://localhost:5173`).
 npm run test
 ```
 
-302 pruebas unitarias en 4 archivos:
+Las suites cubren:
 
-- **`group28Calculator.test.ts`** (23 pruebas): los 3 casos de referencia obligatorios (montos
-  S/300, S/500 y S/3000) al céntimo exacto, separación de 28 días entre cuotas, saldo final en
+- **`group28Calculator.test.ts`**: los 4 casos de referencia obligatorios (incluido S/3500,
+  6 cuotas, 4.70%) al céntimo exacto, separación de 28 días entre cuotas, saldo final en
   cero, aporte total 10% del monto, microseguro `cuotas × S/1.20`, sin `NaN`/`Infinity`.
-- **`monthlyCalculator.reference.test.ts`** (262 pruebas): las 51 cuotas reales de los 5 productos
-  mensuales, comparadas celda por celda **sin tolerancias**. Las celdas donde la fórmula elegida
-  no coincide con la referencia (documentadas en `findings.md`) se marcan explícitamente como
-  fallo esperado (`it.fails`-style), de modo que cualquier mejora futura de la fórmula que
-  empiece a coincidir lo señale como una prueba rota que hay que actualizar — no queda oculta
-  detrás de una tolerancia.
+- **`monthlyCalculator.reference.test.ts`**: 75 cuotas de 6 cronogramas mensuales, con métricas
+  exactas por fixture (filas/celdas exactas, error absoluto, diferencia máxima y diferencias de
+  totales), además del caso Hogar S/18,000 y su cuota programada S/1192.
 - **`dates.test.ts`** (13 pruebas): calendario peruano de negocios, incluidos los 8 corrimientos
   de fecha explícitos requeridos (feriados fijos, Jueves/Viernes Santo, fines de semana), y la
   regla de que la cuota siguiente vuelve al día contractual sin arrastrar el corrimiento.
@@ -114,19 +111,17 @@ Ningún motor conoce el id del producto que lo está usando.
 
 ### GROUP_28 — Crédito Grupal Normal 28 días
 
-Preserva exactamente el comportamiento verificado antes del refactor multiproducto.
-
-1. La tasa mensual ingresada (por ejemplo `5`, es decir 5%) se convierte a decimal.
-2. Se derivan dos tasas (constantes obtenidas por ingeniería inversa): primera cuota
-   `firstRate = monthlyRateDecimal × 0.8348`, cuotas siguientes
-   `regularRate = monthlyRateDecimal × 0.90046`.
-3. Búsqueda binaria (200 iteraciones) de la cuota constante teórica que cancela el saldo.
-4. Cuota programada = `Math.ceil(cuotaTeórica)`.
-5. Interés a rebatir sobre el saldo pendiente, redondeado a 2 decimales. Capital = total − interés.
-6. El saldo interno no se redondea entre cuotas (solo los valores mostrados).
-7. La última cuota liquida el saldo real restante.
-8. Aporte programado = 10% del monto, repartido en partes iguales con remanente en la última cuota.
-9. Microseguro = `cuotas × S/1.20`, mostrado solo en la cabecera.
+1. La tasa mensual porcentual alimenta la base efectiva estimada:
+   `0.03423868 × tasa² - 0.165577 × tasa + 30.99233657`.
+2. Primera tasa: `(1 + TEM) ** (díasRealesPrimeraCuota / baseDías) - 1`.
+3. Tasa regular: `(1 + TEM) ** (28 / baseDías) - 1`.
+4. Búsqueda binaria (240 iteraciones) de la cuota constante teórica que cancela el saldo.
+5. Cuota programada = `Math.ceil(cuotaTeórica - 1e-10)`.
+6. Interés a rebatir sobre el saldo pendiente, redondeado a 2 decimales. Capital = total − interés.
+7. El saldo se actualiza con el capital visible redondeado a 2 decimales.
+8. La última cuota asigna como capital el saldo completo restante.
+9. Aporte programado = 10% del monto, repartido con el remanente en la última cuota.
+10. Microseguro = `cuotas × S/1.20`, mostrado solo en la cabecera.
 
 Vencimientos cada 28 días exactos, **sin ajuste de feriados**. Código:
 [`src/domain/engines/group28Calculator.ts`](src/domain/engines/group28Calculator.ts).
@@ -137,13 +132,14 @@ Un único motor, parametrizado únicamente por `CreditInput` (monto, cuotas, tas
 contractual de pago). Código:
 [`src/domain/engines/monthlyCalculator.ts`](src/domain/engines/monthlyCalculator.ts).
 
-**Fechas** (100% exacto, ver `docs/reverse-engineering/findings.md` §1.1): cada cuota tiene una
+**Fechas**: cada cuota tiene una
 fecha nominal (mismo día del mes que el día contractual, avanzando un mes calendario por cuota).
 La fecha mostrada y usada para el devengo es esa fecha nominal avanzada al siguiente día hábil si
 cae en fin de semana o feriado (calendario en
 [`src/utils/peruBusinessCalendar.ts`](src/utils/peruBusinessCalendar.ts), separado deliberadamente
 de la matemática financiera). La cuota siguiente vuelve al día contractual original, sin arrastrar
-el corrimiento.
+el corrimiento. `nominalDueDate`, `effectiveDueDate`, `accrualDate` y `accrualDays` permanecen
+separados; en esta iteración la fecha de devengo coincide con la fecha efectiva.
 
 **Interés**: `interestRate = (1 + monthlyRateDecimal) ** (díasEfectivos / 30) - 1`, interés a
 rebatir sobre el saldo, base de 30 días por mes. Es la fórmula más simple y auditable encontrada
@@ -156,8 +152,16 @@ prueba).
 **Fondo de cobertura**: `saldo_actual × 0.09309% × meses_nominales_cruzados`, redondeado a 2
 decimales.
 
-**Cuota fija**: búsqueda binaria (misma técnica que GROUP_28) sobre el pago constante que amortiza
-el monto con la fórmula de interés y fondo anteriores, redondeado al sol entero superior.
+**Cuota fija**: búsqueda binaria de 260 iteraciones usando fechas nominales. Durante el solver se
+usa `saldo × 0.0009309 × mesesCobertura × 1.18`; el `1.18` es una calibración interna de ingeniería
+inversa, no se muestra al usuario y no se afirma que sea IGV. La cuota teórica se redondea al sol
+entero superior, salvo créditos de una sola cuota.
+
+Para emitir el informe reproducible de precisión por cronograma:
+
+```bash
+npx vite-node scripts/report-financial-accuracy.ts
+```
 
 ## Investigación de ingeniería inversa
 
@@ -166,7 +170,7 @@ npx tsx scripts/reverse-engineer-monthly.ts
 ```
 
 Evalúa 864 combinaciones de función de tasa × regla de fondo × política de redondeo × precisión de
-saldo contra las 51 cuotas reales de `docs/reverse-engineering/reference-schedules.json`, y reporta
+saldo contra las 75 cuotas reales de `docs/reverse-engineering/reference-schedules.json`, y reporta
 celdas exactas, error medio absoluto, error máximo, y desglose por producto / días / número de
 cuota. El detalle narrativo de la investigación — hipótesis probadas, evidencia, y qué se
 necesitaría para cerrar la brecha restante — está en
@@ -184,10 +188,11 @@ necesitaría para cerrar la brecha restante — está en
 
 ### Productos mensuales
 
-Los 5 cronogramas completos (51 cuotas) están en
+Los 6 cronogramas completos (75 cuotas) están en
 [`docs/reverse-engineering/reference-schedules.json`](docs/reverse-engineering/reference-schedules.json):
 Crédito Educativo (S/5,000, 12 cuotas, 4.00%), Crédito Campaña (S/800, 1 cuota, 2.80%), ADRAWASH
-(S/10,000, 18 cuotas, 3.00%), Mejorando Mi Hogar (S/10,000, 12 cuotas, 3.20%) y Crédito
+(S/10,000, 18 cuotas, 3.00%), Mejorando Mi Hogar (S/10,000, 12 cuotas, 3.20% y S/18,000,
+24 cuotas, 3.80%) y Crédito
 Complementario (S/7,000, 8 cuotas, 4.20%).
 
 ## Estructura del proyecto
@@ -204,7 +209,7 @@ src/
       productTypes.ts         # ProductId, EngineId, ProductDefinition
       productCatalog.ts        # Catálogo de los 6 productos: motor, título, tasa por defecto
     engines/
-      group28Calculator.ts     # Motor GROUP_28 (sin cambios de comportamiento)
+      group28Calculator.ts     # Motor GROUP_28 con base efectiva dependiente de tasa/días
       monthlyCalculator.ts     # Motor MONTHLY_COMMON (único, sin ids de producto)
       financialMath.ts          # round2 centralizado
     schedule/
@@ -226,8 +231,9 @@ src/
   styles.css                  # Incluye estilos de impresión horizontal (@media print)
 scripts/
   reverse-engineer-monthly.ts  # Harness de búsqueda de la fórmula mensual
+  report-financial-accuracy.ts # Métricas exactas de cronogramas de referencia
 docs/
   reverse-engineering/
-    reference-schedules.json   # Fuente de verdad: 3 cronogramas Grupal 28 + 5 mensuales (51 cuotas)
+    reference-schedules.json   # Fuente de verdad: 4 cronogramas GROUP_28 + 6 mensuales (75 cuotas)
     findings.md                 # Investigación completa: hipótesis, evidencia, brecha restante
 ```

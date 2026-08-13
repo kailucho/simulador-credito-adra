@@ -1,34 +1,28 @@
-import { addInstallmentPeriod, formatDueDate, parseLocalDate } from '../../utils/dates'
+import { addInstallmentPeriod, daysBetween, formatDueDate, parseLocalDate } from '../../utils/dates'
 import { round2 } from './financialMath'
 import type { CreditInput, Group28ScheduleResult, Group28ScheduleRow, ValidationErrors } from '../schedule/scheduleTypes'
 
-// NOTE: These constants were derived through reverse engineering of real ADRA
-// schedules provided as reference material. They are NOT an official ADRA
-// formula — see the disclaimer shown in the UI (PaymentReference component).
-// Este motor es EXCLUSIVO del producto Crédito Grupal Normal 28 días y
-// preserva exactamente el comportamiento verificado antes del refactor
-// multiproducto (ver src/tests/group28Calculator.test.ts).
-const FIRST_INSTALLMENT_RATE_FACTOR = 0.8348
-const REGULAR_INSTALLMENT_RATE_FACTOR = 0.90046
+// Método estimado mediante ingeniería inversa de cronogramas reales. No es
+// una fórmula oficial publicada por ADRA. Este motor es exclusivo del crédito
+// con periodicidad fija de 28 días.
 
 const CONTRIBUTION_RATE = 0.1
 const LIFE_INSURANCE_PER_INSTALLMENT = 1.2
-
 const MIN_INSTALLMENTS = 2
 const MAX_INSTALLMENTS = 60
+const BINARY_SEARCH_ITERATIONS = 240
 
-const BINARY_SEARCH_ITERATIONS = 200
+/** Base efectiva en días estimada para la TEM expresada como porcentaje. */
+export function group28EffectiveDayBase(monthlyRatePct: number): number {
+  return 0.03423868 * monthlyRatePct * monthlyRatePct - 0.165577 * monthlyRatePct + 30.99233657
+}
 
 function rateForInstallment(installmentNumber: number, firstRate: number, regularRate: number): number {
   return installmentNumber === 1 ? firstRate : regularRate
 }
 
-/**
- * Finds, via binary search, the constant theoretical payment that fully
- * amortizes `amount` over `installments` periods, given that the first
- * installment accrues interest at `firstRate` and the rest at `regularRate`.
- */
-export function calculateTheoreticalPayment(
+/** Resuelve la cuota constante cuando el primer periodo tiene una tasa distinta. */
+export function solveGroup28Payment(
   amount: number,
   installments: number,
   firstRate: number,
@@ -41,8 +35,8 @@ export function calculateTheoreticalPayment(
     const payment = (low + high) / 2
     let balance = amount
 
-    for (let number = 1; number <= installments; number += 1) {
-      const rate = rateForInstallment(number, firstRate, regularRate)
+    for (let index = 0; index < installments; index += 1) {
+      const rate = index === 0 ? firstRate : regularRate
       balance = balance * (1 + rate) - payment
     }
 
@@ -95,50 +89,44 @@ export function validateGroup28Input(input: CreditInput): ValidationErrors {
 }
 
 export function calculateGroup28Schedule(input: CreditInput): Group28ScheduleResult {
-  const { amount, installments, monthlyRate, firstDueDate } = input
-
+  const { amount, installments, monthlyRate, disbursementDate, firstDueDate } = input
   const monthlyRateDecimal = monthlyRate / 100
-  const firstRate = monthlyRateDecimal * FIRST_INSTALLMENT_RATE_FACTOR
-  const regularRate = monthlyRateDecimal * REGULAR_INSTALLMENT_RATE_FACTOR
-
-  const theoreticalPayment = calculateTheoreticalPayment(amount, installments, firstRate, regularRate)
-  const scheduledPayment = Math.ceil(theoreticalPayment)
+  const disbursement = parseLocalDate(disbursementDate)
+  const firstDate = parseLocalDate(firstDueDate)
+  const baseDays = group28EffectiveDayBase(monthlyRate)
+  const firstRate = (1 + monthlyRateDecimal) ** (daysBetween(disbursement, firstDate) / baseDays) - 1
+  const regularRate = (1 + monthlyRateDecimal) ** (28 / baseDays) - 1
+  const theoreticalPayment = solveGroup28Payment(amount, installments, firstRate, regularRate)
+  const scheduledPayment = Math.ceil(theoreticalPayment - 1e-10)
 
   const contributionTotal = round2(amount * CONTRIBUTION_RATE)
   const contributionBase = Math.ceil(contributionTotal / installments)
   let remainingContribution = contributionTotal
-
-  const firstDate = parseLocalDate(firstDueDate)
-
   let balance = amount
   const rows: Group28ScheduleRow[] = []
 
   for (let number = 1; number <= installments; number += 1) {
     const isLast = number === installments
     const rate = rateForInstallment(number, firstRate, regularRate)
-
-    let interestCharges: number
+    const interestCharges = round2(balance * rate)
     let installmentTotal: number
     let principal: number
 
-    if (!isLast) {
-      interestCharges = round2(balance * rate)
+    if (isLast) {
+      principal = round2(balance)
+      installmentTotal = round2(principal + interestCharges)
+      balance = 0
+    } else {
       installmentTotal = scheduledPayment
       principal = round2(installmentTotal - interestCharges)
-      balance = balance * (1 + rate) - installmentTotal
-    } else {
-      interestCharges = round2(balance * rate)
-      installmentTotal = round2(balance * (1 + rate))
-      principal = round2(installmentTotal - interestCharges)
-      balance = 0
+      balance = round2(balance - principal)
     }
 
     const contribution = isLast
       ? round2(remainingContribution)
       : Math.min(contributionBase, remainingContribution)
     remainingContribution = round2(remainingContribution - contribution)
-
-    const dueDate = number === 1 ? firstDate : addInstallmentPeriod(firstDate, number - 1)
+    const dueDate = addInstallmentPeriod(firstDate, number - 1)
 
     rows.push({
       installmentNumber: number,
@@ -163,7 +151,10 @@ export function calculateGroup28Schedule(input: CreditInput): Group28ScheduleRes
     { principal: 0, interestCharges: 0, installmentTotal: 0, contribution: 0, total: 0 },
   )
 
-  const lifeInsurance = round2(installments * LIFE_INSURANCE_PER_INSTALLMENT)
-
-  return { rows, totals, lifeInsurance, scheduledPayment }
+  return {
+    rows,
+    totals,
+    lifeInsurance: round2(installments * LIFE_INSURANCE_PER_INSTALLMENT),
+    scheduledPayment,
+  }
 }

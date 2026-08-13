@@ -1,57 +1,82 @@
-import { formatDueDate, parseLocalDate } from '../../utils/dates'
+import { daysBetween, formatDueDate, parseLocalDate } from '../../utils/dates'
 import { effectiveMonthlyDueDate, nominalMonthlyDate } from '../../utils/peruBusinessCalendar'
 import { round2 } from './financialMath'
 import type { CreditInput, MonthlyScheduleResult, MonthlyScheduleRow, ValidationErrors } from '../schedule/scheduleTypes'
 
-// Motor financiero mensual único, compartido por todos los productos que lo
-// usan (ver el catálogo de productos para saber cuáles).
-//
-// IMPORTANTE (regla de diseño obligatoria): este archivo NO debe importar
-// nada del catálogo de productos, NO debe contener ningún identificador de
-// producto, y NO debe leer datos de prueba. Toda diferencia entre
-// productos se resuelve exclusivamente con los parámetros de CreditInput
-// (monto, cuotas, tasa, fechas, día nominal). Ver
-// src/tests/monthlyEngineIsolation.test.ts, que lo verifica de forma
-// estática.
-//
-// La fórmula de interés y su brecha de exactitud conocida frente a los
-// cronogramas reales de referencia están documentadas por separado (ver
-// carpeta de investigación en la raíz del repo) — no se debe "cerrar" esa
-// brecha con offsets por fila ni por producto.
+// Motor financiero mensual único. No conoce productos ni datos de prueba:
+// todas las diferencias llegan exclusivamente mediante CreditInput.
+// Método estimado mediante ingeniería inversa de cronogramas reales.
 
-const COVERAGE_FUND_RATE_DEFAULT = 0.09309 // % — ver defaultCreditInput / productCatalog para el valor mostrado en UI
+export const COVERAGE_RATE = 0.0009309
+
+// Calibración usada únicamente para resolver la cuota teórica. Fue estimada
+// mediante ingeniería inversa; no representa ni debe presentarse como IGV.
+const INTERNAL_COVERAGE_FACTOR = 1.18
 
 const MIN_INSTALLMENTS = 1
 const MAX_INSTALLMENTS = 60
+const BINARY_SEARCH_ITERATIONS = 260
 
-const BINARY_SEARCH_ITERATIONS = 200
+/** TEM convertida a tasa efectiva para una cantidad real de días. */
+export function periodInterestRate(monthlyRateDecimal: number, accrualDays: number): number {
+  return (1 + monthlyRateDecimal) ** (accrualDays / 30) - 1
+}
 
-/**
- * Tasa de interés del periodo dado un número de días efectivos. Convención:
- * interés a rebatir con base de 30 días por mes. Ver
- * docs/reverse-engineering/findings.md sección 3 para la justificación y
- * la brecha de exactitud conocida frente a las 51 cuotas de referencia.
- */
-export function periodInterestRate(monthlyRateDecimal: number, effectiveDays: number): number {
-  return (1 + monthlyRateDecimal) ** (effectiveDays / 30) - 1
+/** Fondo visible: saldo por tasa y cantidad de periodos mensuales cubiertos. */
+export function coverageFundAmount(balance: number, coverageRate: number, coverageMonths: number): number {
+  return balance * coverageRate * coverageMonths
+}
+
+export function monthDiff(from: Date, to: Date): number {
+  return (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth())
+}
+
+/** Número de periodos nominales cubiertos por una cuota (mínimo uno). */
+export function getCoverageMonths(
+  disbursementDate: Date,
+  nominalDates: readonly Date[],
+  installmentIndex: number,
+): number {
+  const previous = installmentIndex === 0 ? disbursementDate : nominalDates[installmentIndex - 1]
+  return Math.max(1, monthDiff(previous, nominalDates[installmentIndex]))
 }
 
 /**
- * Fondo de cobertura del periodo: saldo actual × tasa de cobertura ×
- * cantidad de meses nominales cruzados por el periodo (mínimo 1). Ver
- * docs/reverse-engineering/findings.md sección 1.3.
+ * Resuelve la cuota constante con fechas nominales y el costo de cobertura
+ * interno estimado. El factor interno no se usa en las filas visibles.
  */
-export function coverageFundAmount(balance: number, coverageFundRateDecimal: number, nominalMonthsCrossed: number): number {
-  return balance * coverageFundRateDecimal * nominalMonthsCrossed
-}
+export function solveMonthlyPayment(
+  amount: number,
+  installments: number,
+  monthlyRateDecimal: number,
+  disbursementDate: Date,
+  nominalDates: readonly Date[],
+): number {
+  let low = 0
+  let high = amount * 2
 
-function daysBetween(a: Date, b: Date): number {
-  return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24))
-}
+  for (let iteration = 0; iteration < BINARY_SEARCH_ITERATIONS; iteration += 1) {
+    const payment = (low + high) / 2
+    let balance = amount
 
-function monthsCrossed(a: Date, b: Date): number {
-  const months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
-  return Math.max(1, months)
+    for (let index = 0; index < installments; index += 1) {
+      const previous = index === 0 ? disbursementDate : nominalDates[index - 1]
+      const days = daysBetween(previous, nominalDates[index])
+      const interest = balance * periodInterestRate(monthlyRateDecimal, days)
+      const coverageMonths = getCoverageMonths(disbursementDate, nominalDates, index)
+      const internalCoverage = balance * COVERAGE_RATE * coverageMonths * INTERNAL_COVERAGE_FACTOR
+      const principal = payment - interest - internalCoverage
+      balance -= principal
+    }
+
+    if (balance > 0) {
+      low = payment
+    } else {
+      high = payment
+    }
+  }
+
+  return high
 }
 
 export function validateMonthlyInput(input: CreditInput): ValidationErrors {
@@ -98,13 +123,11 @@ export function validateMonthlyInput(input: CreditInput): ValidationErrors {
 
 export function calculateMonthlySchedule(input: CreditInput): MonthlyScheduleResult {
   const { amount, installments, monthlyRate } = input
-  const nominalDay = input.nominalPaymentDay ?? parseLocalDate(input.firstDueDate).getDate()
   const firstDue = parseLocalDate(input.firstDueDate)
   const disbursement = parseLocalDate(input.disbursementDate)
+  const nominalDay = input.nominalPaymentDay ?? firstDue.getDate()
   const monthlyRateDecimal = monthlyRate / 100
-  const coverageFundRateDecimal = COVERAGE_FUND_RATE_DEFAULT / 100
 
-  // Fechas nominales/efectivas de cada cuota, resueltas una sola vez.
   const nominalDates: Date[] = []
   const effectiveDates: Date[] = []
   for (let number = 1; number <= installments; number += 1) {
@@ -112,53 +135,33 @@ export function calculateMonthlySchedule(input: CreditInput): MonthlyScheduleRes
     effectiveDates.push(effectiveMonthlyDueDate(firstDue, nominalDay, number))
   }
 
-  // Cuota fija: búsqueda binaria del pago constante que amortiza el monto
-  // usando la misma fórmula de interés y las mismas fechas efectivas del
-  // cronograma (el fondo de cobertura se resta del pago fijo igual que el
-  // interés, ya que ambos reducen el capital amortizado por cuota).
-  let low = 0
-  let high = amount * 2
-  for (let iteration = 0; iteration < BINARY_SEARCH_ITERATIONS; iteration += 1) {
-    const payment = (low + high) / 2
-    let balance = amount
-    let prevDate = disbursement
+  const theoreticalPayment = solveMonthlyPayment(
+    amount,
+    installments,
+    monthlyRateDecimal,
+    disbursement,
+    nominalDates,
+  )
+  const scheduledPayment = installments === 1
+    ? theoreticalPayment
+    : Math.ceil(theoreticalPayment - 1e-10)
 
-    for (let index = 0; index < installments; index += 1) {
-      const days = daysBetween(prevDate, effectiveDates[index])
-      const rate = periodInterestRate(monthlyRateDecimal, days)
-      const interest = balance * rate
-      const months = monthsCrossed(prevDate, effectiveDates[index])
-      const coverage = coverageFundAmount(balance, coverageFundRateDecimal, months)
-      balance = balance + interest + coverage - payment
-      prevDate = effectiveDates[index]
-    }
-
-    if (balance > 0) {
-      low = payment
-    } else {
-      high = payment
-    }
-  }
-
-  // La cuota se redondea al sol entero superior (igual convención que
-  // GROUP_28: Math.ceil sobre el pago teórico), salvo créditos de una sola
-  // cuota donde no hay "pago recurrente" que redondear — esa única cuota
-  // simplemente liquida el saldo (ver rows loop, rama isLast).
-  const scheduledPayment = installments === 1 ? high : Math.ceil(high)
-
-  // Cronograma final con la cuota fija ya determinada.
   let balance = amount
-  let prevDate = disbursement
+  let previousAccrualDate = disbursement
   const rows: MonthlyScheduleRow[] = []
 
   for (let index = 0; index < installments; index += 1) {
     const isLast = index === installments - 1
-    const dueDate = effectiveDates[index]
-    const days = daysBetween(prevDate, dueDate)
-    const rate = periodInterestRate(monthlyRateDecimal, days)
-    const interestCharges = round2(balance * rate)
-    const months = monthsCrossed(prevDate, dueDate)
-    const coverageFund = round2(coverageFundAmount(balance, coverageFundRateDecimal, months))
+    const nominalDueDate = nominalDates[index]
+    const effectiveDueDate = effectiveDates[index]
+
+    // Punto de extensión: cuando exista evidencia suficiente, accrualDate y
+    // accrualDays podrán venir de una fuente separada de la fecha visible.
+    const accrualDate = effectiveDueDate
+    const accrualDays = daysBetween(previousAccrualDate, accrualDate)
+    const interestCharges = round2(balance * periodInterestRate(monthlyRateDecimal, accrualDays))
+    const coverageMonths = getCoverageMonths(disbursement, nominalDates, index)
+    const coverageFund = round2(coverageFundAmount(balance, COVERAGE_RATE, coverageMonths))
 
     let principal: number
     let total: number
@@ -166,23 +169,28 @@ export function calculateMonthlySchedule(input: CreditInput): MonthlyScheduleRes
     if (isLast) {
       principal = round2(balance)
       total = round2(principal + interestCharges + coverageFund)
+      balance = 0
     } else {
       principal = round2(scheduledPayment - interestCharges - coverageFund)
       total = scheduledPayment
+      balance = round2(balance - principal)
     }
 
     rows.push({
       installmentNumber: index + 1,
-      dueDate,
-      dueDateLabel: formatDueDate(dueDate),
+      nominalDueDate,
+      effectiveDueDate,
+      accrualDate,
+      accrualDays,
+      dueDate: effectiveDueDate,
+      dueDateLabel: formatDueDate(effectiveDueDate),
       principal,
       interestCharges,
       coverageFund,
       total,
     })
 
-    balance = round2(balance - principal)
-    prevDate = dueDate
+    previousAccrualDate = accrualDate
   }
 
   const totals = rows.reduce(

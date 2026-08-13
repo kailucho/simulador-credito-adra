@@ -1,8 +1,8 @@
 /**
  * Harness de ingeniería inversa para el motor MONTHLY_COMMON.
  *
- * Evalúa modelos candidatos contra las 51 cuotas reales de
- * docs/reverse-engineering/reference-schedules.json (5 cronogramas
+ * Evalúa modelos candidatos contra las 75 cuotas reales de
+ * docs/reverse-engineering/reference-schedules.json (6 cronogramas
  * mensuales) y reporta métricas de ajuste por modelo. NO debe ejecutarse
  * desde la UI ni desde el motor de producción — es una herramienta de
  * investigación standalone.

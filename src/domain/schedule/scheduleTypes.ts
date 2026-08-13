@@ -51,6 +51,15 @@ export interface Group28ScheduleResult {
 /** Fila de un cronograma MONTHLY_COMMON (interés a rebatir + fondo de cobertura). */
 export interface MonthlyScheduleRow {
   installmentNumber: number
+  /** Fecha contractual, antes de ajustes de calendario. */
+  nominalDueDate: Date
+  /** Fecha visible, ajustada al siguiente día hábil. */
+  effectiveDueDate: Date
+  /** Fecha usada para devengo; hoy coincide con effectiveDueDate. */
+  accrualDate: Date
+  /** Días reales de devengo; separado para admitir una fuente interna futura. */
+  accrualDays: number
+  /** Alias compatible con los componentes existentes: effectiveDueDate. */
   dueDate: Date
   dueDateLabel: string
   principal: number

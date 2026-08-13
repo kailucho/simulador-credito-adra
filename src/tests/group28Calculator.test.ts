@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateGroup28Schedule } from '../domain/engines/group28Calculator'
+import { calculateGroup28Schedule, group28EffectiveDayBase } from '../domain/engines/group28Calculator'
 import { round2 } from '../domain/engines/financialMath'
 import type { CreditInput } from '../domain/schedule/scheduleTypes'
 import { REFERENCE_GROUP28_CASES } from './fixtures/referenceSchedules'
@@ -9,6 +9,12 @@ describe('round2', () => {
     expect(round2(1.005)).toBeCloseTo(1.01, 2)
     expect(round2(12.5249999)).toBe(12.52)
     expect(round2(0)).toBe(0)
+  })
+})
+
+describe('group28EffectiveDayBase', () => {
+  it('calcula la base efectiva estimada para una tasa mensual de 4.70%', () => {
+    expect(group28EffectiveDayBase(4.7)).toBeCloseTo(30.9704571112, 10)
   })
 })
 

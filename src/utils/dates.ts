@@ -18,6 +18,17 @@ export function addInstallmentPeriod(date: Date, periods = 1): Date {
   return result
 }
 
+/**
+ * Returns the number of calendar days between two local dates.
+ * UTC is used only for the subtraction so a daylight-saving transition on
+ * the machine running the simulator cannot add or remove an accrual day.
+ */
+export function daysBetween(from: Date, to: Date): number {
+  const fromUtc = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())
+  const toUtc = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate())
+  return Math.round((toUtc - fromUtc) / (1000 * 60 * 60 * 24))
+}
+
 function pad2(value: number): string {
   return value.toString().padStart(2, '0')
 }

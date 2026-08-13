@@ -1,5 +1,5 @@
 {
-  "_comment": "Fuente de verdad transcrita a partir del prompt de ingenieria inversa. GROUP_28: 3 cronogramas extraidos de src/tests/creditCalculator.test.ts. MONTHLY_COMMON: 5 cronogramas mensuales con 51 cuotas reales transcritas del material de referencia ADRA. No se debe copiar estos valores dentro del motor: son solo datos de prueba.",
+  "_comment": "Fuente de verdad transcrita a partir de cronogramas de referencia proporcionados. GROUP_28: 4 cronogramas. MONTHLY_COMMON: 6 cronogramas con 75 cuotas. No se debe copiar estos valores dentro del motor: son solo datos de prueba.",
   "group28": [
     {
       "id": "group28-300",
@@ -54,6 +54,26 @@
         { "installmentNumber": 4, "principal": 796.63, "interestCharges": 35.87, "installmentTotal": 832.5, "contribution": 75.0, "total": 907.5 }
       ],
       "totals": { "principal": 3000.0, "interestCharges": 334.5, "installmentTotal": 3334.5, "contribution": 300.0, "total": 3634.5 }
+    },
+    {
+      "id": "group28-3500-6",
+      "product": "GRUPAL_NORMAL_28",
+      "input": {
+        "amount": 3500,
+        "installments": 6,
+        "monthlyRate": 4.7,
+        "disbursementDate": "2026-02-25",
+        "firstDueDate": "2026-03-26"
+      },
+      "rows": [
+        { "installmentNumber": 1, "principal": 520.19, "interestCharges": 153.81, "installmentTotal": 674.0, "contribution": 59.0, "total": 733.0 },
+        { "installmentNumber": 2, "principal": 547.66, "interestCharges": 126.34, "installmentTotal": 674.0, "contribution": 59.0, "total": 733.0 },
+        { "installmentNumber": 3, "principal": 570.88, "interestCharges": 103.12, "installmentTotal": 674.0, "contribution": 59.0, "total": 733.0 },
+        { "installmentNumber": 4, "principal": 595.09, "interestCharges": 78.91, "installmentTotal": 674.0, "contribution": 59.0, "total": 733.0 },
+        { "installmentNumber": 5, "principal": 620.32, "interestCharges": 53.68, "installmentTotal": 674.0, "contribution": 59.0, "total": 733.0 },
+        { "installmentNumber": 6, "principal": 645.86, "interestCharges": 27.38, "installmentTotal": 673.24, "contribution": 55.0, "total": 728.24 }
+      ],
+      "totals": { "principal": 3500.0, "interestCharges": 543.24, "installmentTotal": 4043.24, "contribution": 350.0, "total": 4393.24 }
     }
   ],
   "monthly": [
@@ -163,6 +183,46 @@
         { "installmentNumber": 12, "dueDate": "2026-10-12", "principal": 969.95, "interestCharges": 33.13, "coverageFund": 0.91, "total": 1003.99 }
       ],
       "totals": { "principal": 10000.0, "interestCharges": 2236.93, "coverageFund": 64.06, "total": 12300.99 }
+    },
+    {
+      "id": "monthly-mejorando-mi-hogar-18000",
+      "product": "MEJORANDO_MI_HOGAR",
+      "input": {
+        "amount": 18000,
+        "installments": 24,
+        "monthlyRate": 3.8,
+        "disbursementDate": "2025-03-24",
+        "firstDueDate": "2025-05-02",
+        "nominalPaymentDay": 2,
+        "coverageFundRate": 0.09309
+      },
+      "rows": [
+        { "installmentNumber": 1, "dueDate": "2025-05-02", "principal": 265.02, "interestCharges": 893.47, "coverageFund": 33.51, "total": 1192.0 },
+        { "installmentNumber": 2, "dueDate": "2025-06-02", "principal": 478.72, "interestCharges": 696.77, "coverageFund": 16.51, "total": 1192.0 },
+        { "installmentNumber": 3, "dueDate": "2025-07-02", "principal": 520.19, "interestCharges": 655.75, "coverageFund": 16.06, "total": 1192.0 },
+        { "installmentNumber": 4, "dueDate": "2025-08-04", "principal": 475.72, "interestCharges": 700.70, "coverageFund": 15.58, "total": 1192.0 },
+        { "installmentNumber": 5, "dueDate": "2025-09-02", "principal": 558.96, "interestCharges": 617.90, "coverageFund": 15.14, "total": 1192.0 },
+        { "installmentNumber": 6, "dueDate": "2025-10-02", "principal": 600.91, "interestCharges": 576.47, "coverageFund": 14.62, "total": 1192.0 },
+        { "installmentNumber": 7, "dueDate": "2025-11-03", "principal": 565.22, "interestCharges": 612.73, "coverageFund": 14.05, "total": 1192.0 },
+        { "installmentNumber": 8, "dueDate": "2025-12-02", "principal": 644.81, "interestCharges": 533.66, "coverageFund": 13.53, "total": 1192.0 },
+        { "installmentNumber": 9, "dueDate": "2026-01-02", "principal": 633.34, "interestCharges": 545.73, "coverageFund": 12.93, "total": 1192.0 },
+        { "installmentNumber": 10, "dueDate": "2026-02-02", "principal": 658.82, "interestCharges": 520.84, "coverageFund": 12.34, "total": 1192.0 },
+        { "installmentNumber": 11, "dueDate": "2026-03-02", "principal": 733.92, "interestCharges": 446.35, "coverageFund": 11.73, "total": 1192.0 },
+        { "installmentNumber": 12, "dueDate": "2026-04-06", "principal": 653.57, "interestCharges": 527.39, "coverageFund": 11.04, "total": 1192.0 },
+        { "installmentNumber": 13, "dueDate": "2026-05-04", "principal": 784.38, "interestCharges": 397.19, "coverageFund": 10.43, "total": 1192.0 },
+        { "installmentNumber": 14, "dueDate": "2026-06-02", "principal": 799.50, "interestCharges": 382.79, "coverageFund": 9.71, "total": 1192.0 },
+        { "installmentNumber": 15, "dueDate": "2026-07-02", "principal": 817.22, "interestCharges": 365.82, "coverageFund": 8.96, "total": 1192.0 },
+        { "installmentNumber": 16, "dueDate": "2026-08-03", "principal": 826.33, "interestCharges": 357.47, "coverageFund": 8.20, "total": 1192.0 },
+        { "installmentNumber": 17, "dueDate": "2026-09-03", "principal": 870.91, "interestCharges": 313.66, "coverageFund": 7.43, "total": 1192.0 },
+        { "installmentNumber": 18, "dueDate": "2026-10-02", "principal": 924.25, "interestCharges": 261.13, "coverageFund": 6.62, "total": 1192.0 },
+        { "installmentNumber": 19, "dueDate": "2026-11-02", "principal": 943.11, "interestCharges": 243.13, "coverageFund": 5.76, "total": 1192.0 },
+        { "installmentNumber": 20, "dueDate": "2026-12-02", "principal": 987.80, "interestCharges": 199.31, "coverageFund": 4.89, "total": 1192.0 },
+        { "installmentNumber": 21, "dueDate": "2027-01-04", "principal": 1009.80, "interestCharges": 178.24, "coverageFund": 3.96, "total": 1192.0 },
+        { "installmentNumber": 22, "dueDate": "2027-02-02", "principal": 1069.75, "interestCharges": 119.23, "coverageFund": 3.02, "total": 1192.0 },
+        { "installmentNumber": 23, "dueDate": "2027-03-02", "principal": 1112.81, "interestCharges": 77.16, "coverageFund": 2.03, "total": 1192.0 },
+        { "installmentNumber": 24, "dueDate": "2027-04-02", "principal": 1064.94, "interestCharges": 41.84, "coverageFund": 0.99, "total": 1107.77 }
+      ],
+      "totals": { "principal": 18000.0, "interestCharges": 10264.73, "coverageFund": 259.04, "total": 28523.77 }
     },
     {
       "id": "monthly-complementario",

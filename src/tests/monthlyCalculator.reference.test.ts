@@ -1,166 +1,155 @@
 import { describe, expect, it } from 'vitest'
-import { calculateMonthlySchedule } from '../domain/engines/monthlyCalculator'
+import {
+  calculateMonthlySchedule,
+  getCoverageMonths,
+} from '../domain/engines/monthlyCalculator'
+import { round2 } from '../domain/engines/financialMath'
+import { parseLocalDate } from '../utils/dates'
+import { nominalMonthlyDate } from '../utils/peruBusinessCalendar'
 import type { CreditInput } from '../domain/schedule/scheduleTypes'
 import { REFERENCE_MONTHLY_CASES } from './fixtures/referenceSchedules'
 
-// Tests data-driven, SIN tolerancias, contra las 51 cuotas reales de
-// docs/reverse-engineering/reference-schedules.json.
-//
-// La investigación completa (docs/reverse-engineering/findings.md) no logró
-// identificar una fórmula de interés que reproduzca el 100% de las celdas
-// al céntimo. Este archivo lo refleja honestamente en vez de relajar la
-// aserción con una tolerancia: cada celda (capital / interés / fondo /
-// total) se compara con `expect(actual).toBe(expected)`, y las celdas que
-// se sabe que no coinciden (documentadas en findings.md) se marcan con
-// `it.fails` — vitest reporta esas pruebas como FALLO si alguna vez
-// empiezan a pasar, así que una mejora futura de la fórmula se detecta
-// automáticamente en vez de quedar oculta por una tolerancia.
-//
-// KNOWN_GAP_CELLS lista, por cronograma y número de cuota, qué campos NO
-// coinciden hoy. Se mantiene aquí (no en el motor) para que el motor siga
-// sin conocer ningún caso especial.
-
 type Field = 'principal' | 'interestCharges' | 'coverageFund' | 'total'
 
-const KNOWN_GAP_CELLS: Record<string, Partial<Record<number, Field[]>>> = {
+interface AccuracyMetrics {
+  rowsExact: number
+  rowsTotal: number
+  datesExact: number
+  cellsExact: number
+  cellsTotal: number
+  totalAbsoluteError: number
+  maximumDifference: number
+  principalTotalDifference: number
+  interestTotalDifference: number
+  coverageTotalDifference: number
+  grandTotalDifference: number
+}
+
+const FIELDS: Field[] = ['principal', 'interestCharges', 'coverageFund', 'total']
+
+// Línea base auditable de la fórmula general solicitada. No son tolerancias:
+// cualquier cambio de una celda modifica estas métricas exactas y falla el test.
+const EXPECTED_ACCURACY: Record<string, AccuracyMetrics> = {
   'monthly-educativo': {
-    1: ['principal', 'interestCharges'],
-    2: ['principal', 'interestCharges'],
-    3: ['principal', 'interestCharges'],
-    4: ['principal', 'interestCharges', 'coverageFund'],
-    5: ['principal', 'interestCharges'],
-    6: ['principal', 'interestCharges'],
-    8: ['principal', 'interestCharges'],
-    9: ['principal', 'interestCharges'],
-    11: ['principal', 'interestCharges', 'coverageFund'],
-    12: ['principal', 'interestCharges', 'total'],
+    rowsExact: 2, rowsTotal: 12, datesExact: 12, cellsExact: 25, cellsTotal: 48,
+    totalAbsoluteError: 1.24, maximumDifference: 0.25, principalTotalDifference: 0,
+    interestTotalDifference: 0.25, coverageTotalDifference: 0, grandTotalDifference: 0.25,
   },
   'monthly-campana': {
-    1: ['interestCharges', 'total'],
+    rowsExact: 0, rowsTotal: 1, datesExact: 1, cellsExact: 2, cellsTotal: 4,
+    totalAbsoluteError: 0.02, maximumDifference: 0.01, principalTotalDifference: 0,
+    interestTotalDifference: 0.01, coverageTotalDifference: 0, grandTotalDifference: 0.01,
   },
   'monthly-adrawash': {
-    1: ['principal', 'interestCharges'],
-    2: ['principal', 'interestCharges', 'coverageFund'],
-    3: ['principal', 'coverageFund'],
-    4: ['principal', 'interestCharges'],
-    5: ['principal', 'interestCharges', 'coverageFund'],
-    6: ['principal', 'interestCharges'],
-    8: ['principal', 'interestCharges', 'coverageFund'],
-    9: ['principal', 'interestCharges'],
-    10: ['principal', 'interestCharges', 'coverageFund'],
-    11: ['principal', 'interestCharges'],
-    12: ['principal', 'interestCharges'],
-    13: ['principal', 'coverageFund'],
-    14: ['principal', 'interestCharges'],
-    15: ['principal', 'interestCharges'],
-    18: ['principal', 'interestCharges', 'total'],
+    rowsExact: 3, rowsTotal: 18, datesExact: 18, cellsExact: 37, cellsTotal: 72,
+    totalAbsoluteError: 1.1, maximumDifference: 0.14, principalTotalDifference: 0,
+    interestTotalDifference: 0.13, coverageTotalDifference: 0, grandTotalDifference: 0.13,
   },
   'monthly-mejorando-mi-hogar': {
-    1: ['principal', 'interestCharges', 'total'],
-    2: ['principal', 'interestCharges', 'total'],
-    3: ['principal', 'interestCharges', 'total'],
-    4: ['principal', 'interestCharges', 'coverageFund', 'total'],
-    5: ['principal', 'interestCharges', 'total'],
-    6: ['principal', 'interestCharges', 'coverageFund', 'total'],
-    7: ['principal', 'interestCharges', 'coverageFund', 'total'],
-    8: ['principal', 'interestCharges', 'coverageFund', 'total'],
-    9: ['principal', 'interestCharges', 'coverageFund', 'total'],
-    10: ['principal', 'interestCharges', 'total'],
-    11: ['principal', 'interestCharges', 'coverageFund', 'total'],
-    12: ['principal', 'interestCharges', 'coverageFund', 'total'],
+    rowsExact: 1, rowsTotal: 12, datesExact: 12, cellsExact: 21, cellsTotal: 48,
+    totalAbsoluteError: 1.3, maximumDifference: 0.3, principalTotalDifference: 0,
+    interestTotalDifference: 0.3, coverageTotalDifference: 0, grandTotalDifference: 0.3,
+  },
+  'monthly-mejorando-mi-hogar-18000': {
+    rowsExact: 0, rowsTotal: 24, datesExact: 23, cellsExact: 42, cellsTotal: 96,
+    totalAbsoluteError: 127.94, maximumDifference: 20.94, principalTotalDifference: 0,
+    interestTotalDifference: -2.34, coverageTotalDifference: -0.02, grandTotalDifference: -2.36,
   },
   'monthly-complementario': {
-    1: ['principal', 'interestCharges', 'coverageFund'],
-    2: ['principal', 'interestCharges'],
-    3: ['principal', 'coverageFund'],
-    4: ['principal', 'interestCharges'],
-    5: ['interestCharges', 'coverageFund'],
-    7: ['principal', 'interestCharges'],
-    8: ['principal', 'coverageFund', 'total'],
+    rowsExact: 1, rowsTotal: 8, datesExact: 8, cellsExact: 16, cellsTotal: 32,
+    totalAbsoluteError: 0.48, maximumDifference: 0.07, principalTotalDifference: 0,
+    interestTotalDifference: 0.06, coverageTotalDifference: 0, grandTotalDifference: 0.06,
   },
 }
 
-function isKnownGap(caseId: string, installmentNumber: number, field: Field): boolean {
-  return Boolean(KNOWN_GAP_CELLS[caseId]?.[installmentNumber]?.includes(field))
+function inputFor(referenceCase: (typeof REFERENCE_MONTHLY_CASES)[number]): CreditInput {
+  return { ...referenceCase.input }
+}
+
+function isoDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function accuracyFor(referenceCase: (typeof REFERENCE_MONTHLY_CASES)[number]): AccuracyMetrics {
+  const actual = calculateMonthlySchedule(inputFor(referenceCase))
+  const differences = referenceCase.rows.flatMap((row, index) => (
+    FIELDS.map((field) => actual.rows[index][field] - row[field])
+  ))
+
+  return {
+    rowsExact: referenceCase.rows.filter((row, index) => {
+      const actualRow = actual.rows[index]
+      return isoDate(actualRow.dueDate) === row.dueDate
+        && FIELDS.every((field) => actualRow[field] === row[field])
+    }).length,
+    rowsTotal: referenceCase.rows.length,
+    datesExact: referenceCase.rows.filter((row, index) => isoDate(actual.rows[index].dueDate) === row.dueDate).length,
+    cellsExact: differences.filter((difference) => difference === 0).length,
+    cellsTotal: differences.length,
+    totalAbsoluteError: round2(differences.reduce((sum, difference) => sum + Math.abs(difference), 0)),
+    maximumDifference: round2(Math.max(...differences.map(Math.abs))),
+    principalTotalDifference: round2(actual.totals.principal - referenceCase.totals.principal),
+    interestTotalDifference: round2(actual.totals.interestCharges - referenceCase.totals.interestCharges),
+    coverageTotalDifference: round2(actual.totals.coverageFund - referenceCase.totals.coverageFund),
+    grandTotalDifference: round2(actual.totals.total - referenceCase.totals.total),
+  }
 }
 
 describe.each(REFERENCE_MONTHLY_CASES)('calculateMonthlySchedule - $id', (referenceCase) => {
-  const input: CreditInput = {
-    amount: referenceCase.input.amount,
-    installments: referenceCase.input.installments,
-    monthlyRate: referenceCase.input.monthlyRate,
-    disbursementDate: referenceCase.input.disbursementDate,
-    firstDueDate: referenceCase.input.firstDueDate,
-    nominalPaymentDay: referenceCase.input.nominalPaymentDay,
-  }
-  const result = calculateMonthlySchedule(input)
+  const result = calculateMonthlySchedule(inputFor(referenceCase))
 
-  it('genera el número de cuotas esperado', () => {
+  it('genera el número de cuotas esperado y capitaliza exactamente el monto', () => {
     expect(result.rows).toHaveLength(referenceCase.rows.length)
+    expect(result.totals.principal).toBe(referenceCase.input.amount)
   })
 
-  it.each(referenceCase.rows.map((row, index) => ({ row, index })))(
-    'cuota $row.installmentNumber: fecha de vencimiento exacta',
-    ({ row, index }) => {
-      const actual = result.rows[index]
-      const iso = `${actual.dueDate.getFullYear()}-${String(actual.dueDate.getMonth() + 1).padStart(2, '0')}-${String(actual.dueDate.getDate()).padStart(2, '0')}`
-      expect(iso).toBe(row.dueDate)
-    },
-  )
+  it('reporta métricas exactas de filas, celdas, errores y totales', () => {
+    expect(accuracyFor(referenceCase)).toEqual(EXPECTED_ACCURACY[referenceCase.id])
+  })
 
-  const fields: Field[] = ['principal', 'interestCharges', 'coverageFund', 'total']
+  it('mantiene fechas nominales, efectivas y de devengo como conceptos separados', () => {
+    for (const row of result.rows) {
+      expect(row.dueDate).toBe(row.effectiveDueDate)
+      expect(row.accrualDate).toBe(row.effectiveDueDate)
+      expect(Number.isInteger(row.accrualDays)).toBe(true)
+      expect(row.accrualDays).toBeGreaterThan(0)
+    }
+  })
 
-  for (const field of fields) {
-    describe(field, () => {
-      it.each(referenceCase.rows.map((row, index) => ({ row, index })))(
-        `cuota $row.installmentNumber: ${field} exacto`,
-        ({ row, index }) => {
-          const assertion = () => expect(result.rows[index][field]).toBe(row[field])
-          if (isKnownGap(referenceCase.id, row.installmentNumber, field)) {
-            expect(assertion).toThrow()
-          } else {
-            assertion()
-          }
-        },
-      )
-    })
-  }
+  it('no genera valores NaN ni Infinity', () => {
+    for (const row of result.rows) {
+      for (const field of FIELDS) {
+        expect(Number.isFinite(row[field])).toBe(true)
+      }
+    }
+  })
 })
 
-describe('reglas generales del motor mensual', () => {
-  it('el saldo llega exactamente a cero en todos los cronogramas de referencia', () => {
-    for (const referenceCase of REFERENCE_MONTHLY_CASES) {
-      const input: CreditInput = {
-        amount: referenceCase.input.amount,
-        installments: referenceCase.input.installments,
-        monthlyRate: referenceCase.input.monthlyRate,
-        disbursementDate: referenceCase.input.disbursementDate,
-        firstDueDate: referenceCase.input.firstDueDate,
-        nominalPaymentDay: referenceCase.input.nominalPaymentDay,
-      }
-      const result = calculateMonthlySchedule(input)
-      const totalPrincipal = result.rows.reduce((sum, row) => sum + row.principal, 0)
-      expect(Math.round(totalPrincipal * 100) / 100).toBe(referenceCase.input.amount)
-    }
+describe('caso Hogar S/18,000', () => {
+  const reference = REFERENCE_MONTHLY_CASES.find((item) => item.id === 'monthly-mejorando-mi-hogar-18000')!
+  const result = calculateMonthlySchedule(inputFor(reference))
+
+  it('resuelve la cuota programada en S/1192', () => {
+    expect(result.scheduledPayment).toBe(1192)
   })
 
-  it('no genera valores NaN ni Infinity en ninguna fila', () => {
-    for (const referenceCase of REFERENCE_MONTHLY_CASES) {
-      const input: CreditInput = {
-        amount: referenceCase.input.amount,
-        installments: referenceCase.input.installments,
-        monthlyRate: referenceCase.input.monthlyRate,
-        disbursementDate: referenceCase.input.disbursementDate,
-        firstDueDate: referenceCase.input.firstDueDate,
-        nominalPaymentDay: referenceCase.input.nominalPaymentDay,
-      }
-      const result = calculateMonthlySchedule(input)
-      for (const row of result.rows) {
-        expect(Number.isFinite(row.principal)).toBe(true)
-        expect(Number.isFinite(row.interestCharges)).toBe(true)
-        expect(Number.isFinite(row.coverageFund)).toBe(true)
-        expect(Number.isFinite(row.total)).toBe(true)
-      }
-    }
+  it('aplica dos periodos de cobertura en la primera cuota y muestra S/33.51', () => {
+    const disbursement = parseLocalDate(reference.input.disbursementDate)
+    const firstDue = parseLocalDate(reference.input.firstDueDate)
+    const nominalDates = Array.from({ length: reference.input.installments }, (_, index) => (
+      nominalMonthlyDate(firstDue, reference.input.nominalPaymentDay, index + 1)
+    ))
+    expect(getCoverageMonths(disbursement, nominalDates, 0)).toBe(2)
+    expect(result.rows[0].coverageFund).toBe(33.51)
+  })
+
+  it('usa días efectivos sin inventar correcciones de devengo', () => {
+    expect(result.rows[0].accrualDays).toBe(39)
+    expect(result.rows[0].interestCharges).toBe(894.22)
+    expect(result.rows[0].principal).toBe(264.27)
+    expect(result.rows[0].total).toBe(1192)
   })
 })
